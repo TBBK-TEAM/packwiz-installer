@@ -9,6 +9,9 @@ class ManifestFile {
 	var packFileHash: Hash<*>? = null
 	var indexFileHash: Hash<*>? = null
 	var cachedFiles: MutableMap<PackwizFilePath, File> = HashMap()
+	// Folders (relative to the pack folder) that the pack installs files into, used by full sync to
+	// clean up files left behind by content that was removed from the pack
+	var syncedFolders: MutableSet<String> = HashSet()
 	// If the side changes, EVERYTHING invalidates. FUN!!!
 	var cachedSide = Side.CLIENT
 

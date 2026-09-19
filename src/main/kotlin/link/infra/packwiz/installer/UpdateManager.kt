@@ -27,6 +27,7 @@ import java.io.IOException
 import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.nio.file.Path
 import java.util.concurrent.CompletionService
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.ExecutorCompletionService
@@ -49,6 +50,13 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 		val multimcFolder: PackwizFilePath,
 		val side: Side,
 		val timeout: Long,
+		// Delete files that are no longer part of the pack (removed mods, configs, resource packs, ...)
+		val prune: Boolean = true,
+		// Also delete files that the pack doesn't manage, inside folders the pack installs files into
+		val pruneAll: Boolean = false,
+		// Like pruneAll, but also cleans up folders the pack used to manage, and empty folders, so
+		// that the pack folder cannot drift out of sync with the pack
+		val fullSync: Boolean = false,
 	)
 
 	// TODO: make this return a value based on results?
@@ -247,20 +255,8 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 		}
 
 		ui.submitProgress(InstallProgress("Checking local files..."))
-		val it: MutableIterator<Map.Entry<PackwizFilePath, ManifestFile.File>> = manifest.cachedFiles.entries.iterator()
-		while (it.hasNext()) {
-			val (uri, file) = it.next()
-			if (file.cachedLocation != null) {
-				if (indexFile.files.none { it.file.rebase(opts.packFolder) == uri }) { // File has been removed from the index
-					try {
-						Files.deleteIfExists(file.cachedLocation!!.nioPath)
-					} catch (e: IOException) {
-						Log.warn("Failed to delete file removed from index", e)
-					}
-					Log.info("Deleted ${file.cachedLocation!!.filename} (removed from pack)")
-					it.remove()
-				}
-			}
+		if (opts.prune) {
+			deleteFilesRemovedFromPack(indexFile, manifest)
 		}
 
 		if (ui.cancelButtonPressed) {
@@ -421,6 +417,241 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 				ExceptionListResult.IGNORE -> cancelledStartGame = true
 			}
 		}
+
+		// Delete files that are no longer part of the pack (removed mods, configs, resource packs, ...).
+		// This also catches files that the local manifest doesn't know about (for example if it was
+		// deleted, or the files were installed by hand), which would otherwise never be removed.
+		if (opts.prune && !cancelled && !cancelledStartGame && !errorsOccurred) {
+			deleteOrphanedFiles(indexFile, manifest)
+		}
+	}
+
+	/**
+	 * Deletes files that were installed by a previous update, but which are no longer part of the pack.
+	 *
+	 * The manifest records where files were installed, so it is used to find removed files.
+	 */
+	private fun deleteFilesRemovedFromPack(indexFile: IndexFile, manifest: ManifestFile) {
+		val it: MutableIterator<Map.Entry<PackwizFilePath, ManifestFile.File>> = manifest.cachedFiles.entries.iterator()
+		while (it.hasNext()) {
+			val (uri, file) = it.next()
+			if (indexFile.files.any { it.file.rebase(opts.packFolder) == uri }) {
+				// Still part of the pack, don't touch it
+				continue
+			}
+			val location = file.cachedLocation
+			if (location == null) {
+				// Nothing was ever installed for this entry, so there is nothing to delete
+				it.remove()
+				continue
+			}
+			try {
+				if (Files.deleteIfExists(location.nioPath)) {
+					Log.info("Deleted ${location.filename} (removed from pack)")
+				}
+				it.remove()
+			} catch (e: IOException) {
+				// Keep the manifest entry, so that the deletion is retried on the next update
+				// (the file might be locked by a running game or server)
+				errorsOccurred = true
+				Log.warn("Failed to delete ${location.filename} (removed from pack), will retry on the next update", e)
+			}
+		}
+	}
+
+	/**
+	 * Deletes files that are no longer part of the pack (removed mods, configs, resource packs, ...),
+	 * without relying on the manifest to find all of them.
+	 *
+	 * Files that were installed by a previous update are found using the manifest, but leftover files
+	 * inside the folders that the pack installs files into are removed as well, so that files which the
+	 * manifest doesn't know about (for example when it was deleted, or files that were added by hand)
+	 * cannot make the pack folder drift out of sync with the pack.
+	 */
+	private fun deleteOrphanedFiles(indexFile: IndexFile, manifest: ManifestFile) {
+		// Resolve the destination of every file in the pack. If any of them cannot be resolved (for
+		// example if its metadata failed to download) we don't know which files are still needed, so
+		// nothing is deleted at all.
+		val dests = ArrayList<PackwizFilePath>(indexFile.files.size)
+		for (indexEntry in indexFile.files) {
+			val dest = try {
+				indexEntry.destURI.rebase(opts.packFolder)
+			} catch (e: Exception) {
+				Log.warn("Could not determine the destination of ${indexEntry.file}, not removing any leftover files", e)
+				return
+			}
+			dests.add(dest)
+		}
+
+		// With --prune-all (or --full-sync) every file type is removed, otherwise only mod JARs are,
+		// so that files which the pack doesn't manage (for example configs generated by the game) are
+		// left alone
+		val pruneAll = opts.pruneAll || opts.fullSync
+		val wanted = HashSet<Path>()
+		val managed = LinkedHashSet<String>()
+		val folders = LinkedHashSet<String>()
+		for (dest in dests) {
+			wanted.add(dest.nioPath.normalize())
+			val folder = managedFolderOf(dest) ?: continue
+			managed.add(folder)
+			if (pruneAll || dest.filename.endsWith(".jar", ignoreCase = true)) {
+				folders.add(folder)
+			}
+		}
+
+		// Remember the folders that the pack installs files into, so that folders which the pack stops
+		// managing later can be cleaned up by full sync
+		manifest.syncedFolders.addAll(managed)
+
+		if (opts.fullSync) {
+			// Full sync also cleans up folders that the pack managed in the past, so that files left
+			// behind by mods that were removed from the pack cannot stay in the pack folder forever
+			folders.addAll(manifest.syncedFolders)
+		}
+
+		// The manifest itself must never be deleted, even when it is stored inside a managed folder
+		val protectedFiles = HashSet<Path>()
+		protectedFiles.add(opts.manifestFile.nioPath.normalize())
+
+		var deleted = 0
+		for (folder in outermostFirst(folders)) {
+			if (isRuntimeFolder(folder)) {
+				Log.warn("Not removing leftover files in $folder, as it holds data that the game or server generates")
+				continue
+			}
+			val folderPath = opts.packFolder.resolve(folder).nioPath
+			deleted += deleteUnmanagedFilesIn(folderPath, wanted, protectedFiles, pruneAll, opts.fullSync)
+			if (opts.fullSync) {
+				try {
+					// Only deletes the folder when nothing is left in it
+					Files.delete(folderPath)
+				} catch (e: IOException) {
+					// Still contains files (or is in use), leave it alone
+				}
+			}
+		}
+		if (deleted > 0) {
+			Log.info("Deleted $deleted file(s) that are no longer part of the pack")
+		}
+	}
+
+	/**
+	 * Folders that are never swept for leftover files, as they hold data (worlds, logs, backups, ...)
+	 * that the game or server generates while running, and which the pack does not manage.
+	 */
+	private fun isRuntimeFolder(folder: String): Boolean {
+		val top = folder.substringBefore('/').lowercase()
+		return top == "world" || top.startsWith("world_") || top in runtimeFolders
+	}
+
+	/**
+	 * The folder (relative to the pack folder) that a file is installed into, for example "mods" for
+	 * "mods/example.jar" or "config/example" for "config/example/settings.toml".
+	 *
+	 * Files that are installed directly into the pack folder are not managed, as the pack folder also
+	 * contains the game or server itself.
+	 */
+	private fun managedFolderOf(dest: PackwizFilePath): String? {
+		val folder = dest.parent
+		if (folder == opts.packFolder) {
+			return null
+		}
+		val parts = relativePathOf(folder)
+		if (parts.isEmpty()) {
+			return null
+		}
+		return parts.joinToString("/")
+	}
+
+	/**
+	 * The path of [path] relative to the pack folder, as a list of path components.
+	 */
+	private fun relativePathOf(path: PackwizFilePath): List<String> {
+		val parts = ArrayList<String>()
+		var current = path
+		while (current != opts.packFolder) {
+			parts.add(current.filename)
+			val up = current.parent
+			if (up == current) {
+				break
+			}
+			current = up
+		}
+		parts.reverse()
+		return parts
+	}
+
+	/**
+	 * Sorts folders so that a folder is always handled before the folders inside it, as sweeping the
+	 * outer folder covers the inner ones as well.
+	 */
+	private fun outermostFirst(folders: Collection<String>): List<String> {
+		val result = ArrayList<String>(folders.size)
+		for (folder in folders.sorted()) {
+			if (result.any { folder.startsWith("$it/") }) {
+				continue
+			}
+			result.add(folder)
+		}
+		return result
+	}
+
+	/**
+	 * Deletes files in [folder] that are not part of the pack, recursively.
+	 */
+	private fun deleteUnmanagedFilesIn(folder: Path, wanted: Set<Path>, protectedFiles: Set<Path>, pruneAll: Boolean, removeEmptyFolders: Boolean): Int {
+		if (!Files.isDirectory(folder)) {
+			return 0
+		}
+		var deleted = 0
+		try {
+			Files.newDirectoryStream(folder).use { entries ->
+				for (entry in entries) {
+					val name = entry.fileName.toString()
+					// Hidden and disabled files belong to the user, not to the pack
+					if (name.startsWith(".") || name.endsWith(".disabled")) {
+						continue
+					}
+					if (Files.isDirectory(entry)) {
+						deleted += deleteUnmanagedFilesIn(entry, wanted, protectedFiles, pruneAll, removeEmptyFolders)
+						if (removeEmptyFolders) {
+							try {
+								// Only deletes the folder when nothing is left in it
+								Files.delete(entry)
+							} catch (e: IOException) {
+								// Still contains files (or is in use), leave it alone
+							}
+						}
+						continue
+					}
+					if (!Files.isRegularFile(entry)) {
+						continue
+					}
+					val normalized = entry.normalize()
+					if (normalized in wanted || normalized in protectedFiles) {
+						continue
+					}
+					// Pack metadata files are kept, as the pack folder may be a packwiz pack itself
+					if (name.endsWith(".pw.toml")) {
+						continue
+					}
+					if (!pruneAll && !name.endsWith(".jar", ignoreCase = true)) {
+						continue
+					}
+					try {
+						if (Files.deleteIfExists(entry)) {
+							Log.info("Deleted $name (no longer in the pack)")
+							deleted++
+						}
+					} catch (e: IOException) {
+						Log.warn("Failed to delete leftover file $name", e)
+					}
+				}
+			}
+		} catch (e: IOException) {
+			Log.warn("Failed to check $folder for leftover files", e)
+		}
+		return deleted
 	}
 
 	enum class ResolveResult {
@@ -485,3 +716,8 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 	}
 
 }
+
+// Folders holding data generated by the game or server, which is never swept for leftover files
+private val runtimeFolders = setOf(
+	"backups", "cache", "crash-reports", "libraries", "local", "logs", "saves", "screenshots", "versions"
+)

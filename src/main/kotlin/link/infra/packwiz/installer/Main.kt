@@ -106,10 +106,15 @@ class Main(args: Array<String>) {
 		val timeout = ui.wrap("Invalid timeout value") {
 			cmd.getOptionValue("timeout")?.toLong() ?: 10
 		}
+		// Files that are no longer part of the pack are deleted by default
+		val prune = !cmd.hasOption("no-prune")
+		// --full-sync implies --prune-all
+		val pruneAll = prune && (cmd.hasOption("prune-all") || cmd.hasOption("full-sync"))
+		val fullSync = prune && cmd.hasOption("full-sync")
 
 		// Start update process!
 		try {
-			UpdateManager(UpdateManager.Options(packFile, manifestFile, packFolder, multimcFolder, side, timeout), ui)
+			UpdateManager(UpdateManager.Options(packFile, manifestFile, packFolder, multimcFolder, side, timeout, prune, pruneAll, fullSync), ui)
 		} catch (e: Exception) {
 			ui.showErrorAndExit("Update process failed", e)
 		}
@@ -127,6 +132,9 @@ class Main(args: Array<String>) {
 			options.addOption(null, "multimc-folder", true, "The MultiMC pack folder (defaults to the parent of the pack directory)")
 			options.addOption(null, "meta-file", true, "JSON file to store pack metadata, relative to the pack folder (defaults to packwiz.json)")
 			options.addOption("t", "timeout", true, "Seconds to wait before automatically launching when asking about optional mods (defaults to 10)")
+			options.addOption(null, "no-prune", false, "Keep files that are no longer part of the pack, instead of deleting them")
+			options.addOption(null, "prune-all", false, "Also delete files the pack doesn't manage, inside folders the pack installs files into")
+			options.addOption(null, "full-sync", false, "Keep the pack folder exactly in sync with the pack, including folders it used to manage (implies --prune-all)")
 		}
 
 		// TODO: link these somehow so they're only defined once?
