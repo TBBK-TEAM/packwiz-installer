@@ -135,8 +135,10 @@ tasks.build {
 }
 
 githubRelease {
-	owner("comp500")
-	repo("packwiz-installer")
+	// Release to the repository the workflow runs in (forks release to themselves)
+	val githubRepo = System.getenv("GITHUB_REPOSITORY") ?: "TBBK-TEAM/packwiz-installer"
+	owner(githubRepo.substringBefore('/'))
+	repo(githubRepo.substringAfter('/'))
 	tagName("${project.version}")
 	releaseName("Release ${project.version}")
 	draft(true)
@@ -175,16 +177,19 @@ javaComponent.withVariantsFromConfiguration(configurations["shadowRuntimeElement
 	skip()
 }
 
-if (project.hasProperty("bunnycdn.token")) {
-	publishing {
-		publications {
-			create<MavenPublication>("maven") {
-				groupId = "link.infra.packwiz"
-				artifactId = "packwiz-installer"
+// Only publish to BunnyCDN when a token is available, so that builds (e.g. forks) without the
+// BUNNYCDN_TOKEN secret still succeed
+val bunnycdnToken = (findProperty("bunnycdn.token") as String?)?.takeIf { it.isNotEmpty() }
+publishing {
+	publications {
+		create<MavenPublication>("maven") {
+			groupId = "link.infra.packwiz"
+			artifactId = "packwiz-installer"
 
-				from(components["java"])
-			}
+			from(components["java"])
 		}
+	}
+	if (bunnycdnToken != null) {
 		repositories {
 			maven {
 				url = if (project.findProperty("release") == "true") {
@@ -194,7 +199,7 @@ if (project.hasProperty("bunnycdn.token")) {
 				}
 				credentials(HttpHeaderCredentials::class) {
 					name = "AccessKey"
-					value = findProperty("bunnycdn.token") as String?
+					value = bunnycdnToken
 				}
 				authentication {
 					create<HttpHeaderAuthentication>("header")
