@@ -1,4 +1,4 @@
-﻿# packwiz-installer
+# packwiz-installer
 An installer for launching packwiz modpacks with MultiMC.
 
 ## Running the installer

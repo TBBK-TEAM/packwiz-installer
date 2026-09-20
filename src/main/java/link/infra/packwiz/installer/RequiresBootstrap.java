@@ -1,4 +1,4 @@
-﻿package link.infra.packwiz.installer;
+package link.infra.packwiz.installer;
 
 /**
  * Legacy entry point, kept so that anything which still launches the installer through this class

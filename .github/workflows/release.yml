@@ -1,4 +1,4 @@
-﻿name: Java Gradle Release
+name: Java Gradle Release
 
 on:
   push:
