@@ -118,15 +118,17 @@ class Main(args: Array<String>) {
 		val timeout = ui.wrap("Invalid timeout value") {
 			cmd.getOptionValue("timeout")?.toLong() ?: 10
 		}
-		// Files that are no longer part of the pack are deleted by default
+		// Files that the pack installed and later removed are deleted by default; files that the pack
+		// never installed (added by the player) are only deleted when that is explicitly requested
 		val prune = !cmd.hasOption("no-prune")
-		// --full-sync implies --prune-all
-		val pruneAll = prune && (cmd.hasOption("prune-all") || cmd.hasOption("full-sync"))
+		val pruneMods = prune && cmd.hasOption("prune-mods")
+		val pruneUserFolders = prune && cmd.hasOption("prune-user-folders")
+		val pruneAll = prune && cmd.hasOption("prune-all")
 		val fullSync = prune && cmd.hasOption("full-sync")
 
 		// Start update process!
 		try {
-			UpdateManager(UpdateManager.Options(packFile, manifestFile, packFolder, multimcFolder, side, timeout, prune, pruneAll, fullSync), ui)
+			UpdateManager(UpdateManager.Options(packFile, manifestFile, packFolder, multimcFolder, side, timeout, prune, pruneMods, pruneUserFolders, pruneAll, fullSync), ui)
 		} catch (e: Exception) {
 			ui.showErrorAndExit("Update process failed", e)
 		}
@@ -145,8 +147,10 @@ class Main(args: Array<String>) {
 			options.addOption(null, "meta-file", true, "JSON file to store pack metadata, relative to the pack folder (defaults to packwiz.json)")
 			options.addOption("t", "timeout", true, "Seconds to wait before automatically launching when asking about optional mods (defaults to 10)")
 			options.addOption(null, "no-prune", false, "Keep files that are no longer part of the pack, instead of deleting them")
-			options.addOption(null, "prune-all", false, "Also delete files the pack doesn't manage, inside folders the pack installs files into")
-			options.addOption(null, "full-sync", false, "Keep the pack folder exactly in sync with the pack, including folders it used to manage (implies --prune-all)")
+			options.addOption(null, "prune-mods", false, "Also delete leftover files in the folders the pack installs mods into")
+			options.addOption(null, "prune-user-folders", false, "Also delete leftover files (configs, resource packs, ...) in the other folders the pack installs files into")
+			options.addOption(null, "prune-all", false, "Sweep every folder of the pack with every file type, including folders it used to manage (implies --prune-mods, --prune-user-folders and --full-sync)")
+			options.addOption(null, "full-sync", false, "Also clean up folders the pack used to manage, and folders that are left empty (combine with --prune-mods or --prune-user-folders)")
 			options.addOption("V", "version", false, "Display the installer version")
 		}
 
