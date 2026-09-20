@@ -13,6 +13,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 import okio.Path.Companion.toOkioPath
 import okio.Path.Companion.toPath
 import org.apache.commons.cli.DefaultParser
+import org.apache.commons.cli.HelpFormatter
 import org.apache.commons.cli.Options
 import org.apache.commons.cli.ParseException
 import java.awt.EventQueue
@@ -54,6 +55,17 @@ class Main(args: Array<String>) {
 
 		if (guiEnabled && cmd.hasOption("no-gui")) {
 			guiEnabled = false
+		}
+
+		// Handled here (rather than only by packwiz-installer-bootstrap), so that the installer can
+		// be used on its own
+		if (cmd.hasOption("help")) {
+			HelpFormatter().printHelp("java -jar packwiz-installer.jar [options] <pack.toml URI>", options)
+			exitProcess(0)
+		}
+		if (cmd.hasOption("version")) {
+			println("packwiz-installer ${Main::class.java.`package`?.implementationVersion ?: "(unknown version)"}")
+			exitProcess(0)
 		}
 
 		val ui = if (guiEnabled) GUIHandler() else CLIHandler()
@@ -135,6 +147,7 @@ class Main(args: Array<String>) {
 			options.addOption(null, "no-prune", false, "Keep files that are no longer part of the pack, instead of deleting them")
 			options.addOption(null, "prune-all", false, "Also delete files the pack doesn't manage, inside folders the pack installs files into")
 			options.addOption(null, "full-sync", false, "Keep the pack folder exactly in sync with the pack, including folders it used to manage (implies --prune-all)")
+			options.addOption("V", "version", false, "Display the installer version")
 		}
 
 		// TODO: link these somehow so they're only defined once?
@@ -145,17 +158,18 @@ class Main(args: Array<String>) {
 			options.addOption(null, "bootstrap-no-update", false, "Don't update packwiz-installer")
 			options.addOption(null, "bootstrap-main-jar", true, "Location of the packwiz-installer JAR file")
 			options.addOption("g", "no-gui", false, "Don't display a GUI to show update progress")
-			options.addOption("h", "help", false, "Display this message") // Implemented in packwiz-installer-bootstrap!
+			// Also handled by the installer itself when it is run directly
+			options.addOption("h", "help", false, "Display this message")
 		}
 
 		@JvmStatic
 		fun main(args: Array<String>) {
-			Log.info("packwiz-installer was started without packwiz-installer-bootstrap. Use the bootstrapper for automatic updates! (Disregard this message if you have your own update mechanism)")
+			Log.info("Running packwiz-installer directly: the installer will not update itself. Use packwiz-installer-bootstrap for automatic updates.")
 			Main(args)
 		}
 	}
 
-	// Actual main() is in RequiresBootstrap!
+	// This class is the entry point of the JAR (Main-Class); packwiz-installer-bootstrap loads it directly
 	init {
 		// Big overarching try/catch just in case everything breaks
 		try {

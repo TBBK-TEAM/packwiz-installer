@@ -1,37 +1,17 @@
-package link.infra.packwiz.installer;
+﻿package link.infra.packwiz.installer;
 
-import javax.swing.*;
-import java.util.Arrays;
-
+/**
+ * Legacy entry point, kept so that anything which still launches the installer through this class
+ * keeps working.
+ *
+ * packwiz-installer no longer requires packwiz-installer-bootstrap: running
+ * {@code java -jar packwiz-installer.jar ...} starts the installer directly. (The bootstrapper
+ * loads {@link Main} by name, it does not use the JAR's Main-Class attribute.)
+ */
 public class RequiresBootstrap {
 
 	public static void main(String[] args) {
-		// Very small CLI implementation, because Commons CLI complains on unexpected
-		// options
-		if (Arrays.stream(args).map(str -> {
-			if (str == null) return "";
-			if (str.startsWith("--")) {
-				return str.substring(2);
-			}
-			if (str.startsWith("-")) {
-				return str.substring(1);
-			}
-			return "";
-		}).anyMatch(str -> str.equals("g") || str.equals("no-gui"))) {
-			System.out.println(
-					"This program must be run through packwiz-installer-bootstrap. Use --bootstrap-no-update to disable updating.");
-			System.exit(1);
-		} else {
-			try {
-				UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-			} catch (Exception e) {
-				// Ignore the exceptions, just continue using the ugly L&F
-			}
-			JOptionPane.showMessageDialog(null,
-					"This program must be run through packwiz-installer-bootstrap. Use --bootstrap-no-update to disable updating.",
-					"packwiz-installer", JOptionPane.ERROR_MESSAGE);
-			System.exit(1);
-		}
+		Main.main(args);
 	}
 
 }

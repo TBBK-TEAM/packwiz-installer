@@ -1,5 +1,27 @@
 ﻿# packwiz-installer
-An installer for launching packwiz modpacks with MultiMC. You'll need [the bootstrapper](https://github.com/comp500/packwiz-installer-bootstrap/releases) to actually use this.
+An installer for launching packwiz modpacks with MultiMC.
+
+## Running the installer
+
+It can be run on its own - the bootstrapper is optional:
+
+```
+java -jar packwiz-installer.jar --side server --full-sync https://example.com/pack.toml
+```
+
+`--help` lists all options and `--version` prints the version of the installer.
+
+Alternatively, [the bootstrapper](https://github.com/comp500/packwiz-installer-bootstrap/releases)
+can be used to keep the installer itself up to date:
+
+```
+java -jar packwiz-installer-bootstrap.jar -g -s server --full-sync https://example.com/pack.toml
+```
+
+Note that the bootstrapper updates the installer from the *upstream* releases by default: when using a
+fork, point it at that fork's releases with
+`--bootstrap-update-url https://api.github.com/repos/<owner>/<repo>/releases/latest`, use
+`--bootstrap-no-update`, or just run the installer directly.
 
 ## Keeping the pack folder in sync
 

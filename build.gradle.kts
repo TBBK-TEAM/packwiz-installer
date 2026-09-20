@@ -44,7 +44,7 @@ dependencies {
 }
 
 application {
-	mainClass.set("link.infra.packwiz.installer.RequiresBootstrap")
+	mainClass.set("link.infra.packwiz.installer.Main")
 }
 
 val gitVersion: groovy.lang.Closure<*> by extra
@@ -52,7 +52,8 @@ version = gitVersion()
 
 tasks.jar {
 	manifest {
-		attributes["Main-Class"] = "link.infra.packwiz.installer.RequiresBootstrap"
+		// The installer can be run directly; the bootstrapper loads Main itself (not via this attribute)
+		attributes["Main-Class"] = "link.infra.packwiz.installer.Main"
 		attributes["Implementation-Version"] = project.version
 	}
 }
@@ -65,6 +66,11 @@ licenseReport {
 }
 
 tasks.shadowJar {
+	manifest {
+		attributes["Main-Class"] = "link.infra.packwiz.installer.Main"
+		attributes["Implementation-Version"] = project.version
+	}
+
 	// 4koma uses kotlin-reflect; requires Kotlin metadata
 	//exclude("**/*.kotlin_metadata")
 	//exclude("**/*.kotlin_builtins")
