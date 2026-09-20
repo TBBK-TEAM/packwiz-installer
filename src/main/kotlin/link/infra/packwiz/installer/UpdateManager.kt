@@ -532,6 +532,9 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 		val sweepMods = opts.pruneMods || opts.pruneAll
 		val sweepUserFolders = opts.pruneUserFolders || opts.pruneAll
 		val fullSync = opts.fullSync || opts.pruneAll
+		if (fullSync && !sweepMods && !sweepUserFolders) {
+			Log.warn("--full-sync only cleans up folders the pack currently manages; add --prune-mods or --prune-user-folders (or --prune-all) to also remove leftover files")
+		}
 
 		// Work out which folders the pack installs files into, and which of them hold mod JARs (the
 		// folders that the pack owns, as opposed to folders that are shared with the player)
