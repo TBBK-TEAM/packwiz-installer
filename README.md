@@ -43,6 +43,8 @@ during the next update:
   the pack folder cannot drift out of sync with the pack, as nothing that is not part of the pack is
   kept in those folders.
 * `--no-prune` keeps files that are no longer part of the pack instead of deleting them.
+* Cleanup also runs when the pack itself is already up to date, so files that were added by hand are
+  removed even if nothing in the pack changed.
 
 Only files inside folders that the pack installs files into are ever deleted - the rest of the pack
 folder (the world, logs, `server.properties`, plugins, ...) is never touched. Hidden files (`.foo`)
