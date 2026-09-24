@@ -7,6 +7,14 @@ import com.google.gson.annotations.SerializedName
 enum class Side(sideName: String) {
 	@SerializedName("client")
 	CLIENT("client"),
+	// Like CLIENT, but excludes files marked with side = "both": used to install a pack containing
+	// only client-side-specific files (e.g. into AutoModpack's separate host-modpack directory)
+	@SerializedName("client-only")
+	CLIENT_ONLY("client-only") {
+		override fun hasSide(tSide: Side): Boolean {
+			return tSide == CLIENT
+		}
+	},
 	@SerializedName("server")
 	SERVER("server"),
 	@SerializedName("both")

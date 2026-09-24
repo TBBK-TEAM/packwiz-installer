@@ -140,7 +140,7 @@ class Main(args: Array<String>) {
 		// Called by packwiz-installer-bootstrap to set up the help command
 		@JvmStatic
 		fun addNonBootstrapOptions(options: Options) {
-			options.addOption("s", "side", true, "Side to install mods from (client/server, defaults to client)")
+			options.addOption("s", "side", true, "Side to install mods from (client/client-only/server, defaults to client)")
 			options.addOption(null, "title", true, "Title of the installer window")
 			options.addOption(null, "pack-folder", true, "Folder to install the pack to (defaults to the JAR directory)")
 			options.addOption(null, "multimc-folder", true, "The MultiMC pack folder (defaults to the parent of the pack directory)")
