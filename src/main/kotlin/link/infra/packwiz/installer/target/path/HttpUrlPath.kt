@@ -3,6 +3,7 @@ package link.infra.packwiz.installer.target.path
 import link.infra.packwiz.installer.request.RequestException
 import link.infra.packwiz.installer.target.ClientHolder
 import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Request
 import okio.BufferedSource
 import okio.IOException
@@ -66,4 +67,15 @@ class HttpUrlPath(private val url: HttpUrl, path: String? = null): PackwizPath<H
 	}
 
 	override fun toString() = build().toString()
+
+	companion object {
+		/** Builds an [HttpUrlPath] from a raw http(s) URL string, validating the scheme first. */
+		fun fromRaw(raw: String): HttpUrlPath {
+			if (!raw.startsWith("http://", ignoreCase = true) && !raw.startsWith("https://", ignoreCase = true)) {
+				throw IllegalArgumentException("Not an HTTP(S) URL: $raw")
+			}
+			val url = raw.toHttpUrl()
+			return HttpUrlPath(url.resolve(".")!!, url.pathSegments.last())
+		}
+	}
 }

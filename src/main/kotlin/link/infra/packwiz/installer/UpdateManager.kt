@@ -15,6 +15,7 @@ import link.infra.packwiz.installer.metadata.hash.HashFormat
 import link.infra.packwiz.installer.request.RequestException
 import link.infra.packwiz.installer.target.ClientHolder
 import link.infra.packwiz.installer.target.Side
+import link.infra.packwiz.installer.target.path.HttpUrlPath
 import link.infra.packwiz.installer.target.path.PackwizFilePath
 import link.infra.packwiz.installer.target.path.PackwizPath
 import link.infra.packwiz.installer.ui.IUserInterface
@@ -64,6 +65,9 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 		// Also clean up folders the pack used to manage, and folders that are left empty, so that the
 		// pack folder cannot drift out of sync with the pack
 		val fullSync: Boolean = false,
+		// Fallback pack.toml URLs (--mirror); tried in order if the primary pack.toml URL fails to
+		// fetch or parse. The first candidate that succeeds becomes the base for all relative paths.
+		val mirrorUrls: List<String> = emptyList(),
 	)
 
 	// TODO: make this return a value based on results?
@@ -99,20 +103,36 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 		}
 
 		ui.submitProgress(InstallProgress("Loading pack file..."))
-		val packFileSource = try {
-			val src = opts.packFile.source(clientHolder)
-			HashFormat.SHA256.source(src)
-		} catch (e: Exception) {
-			// TODO: ensure suppressed/caused exceptions are shown?
-			ui.showErrorAndExit("Failed to download pack.toml", e)
-		}
-		val pf = packFileSource.buffer().use {
+		// Candidates: the primary pack.toml URL first, then every --mirror URL (http(s) only).
+		val packTomlCandidates = ArrayList<PackwizPath<*>>()
+		packTomlCandidates.add(opts.packFile)
+		for (raw in opts.mirrorUrls) {
 			try {
-				PackFile.mapper(opts.packFile).decode<PackFile>(it.inputStream())
-			} catch (e: IllegalStateException) {
-				ui.showErrorAndExit("Failed to parse pack.toml", e)
+				packTomlCandidates.add(HttpUrlPath.fromRaw(raw))
+			} catch (e: Exception) {
+				Log.warn("Skipping invalid --mirror URL: $raw (${e.message})")
 			}
 		}
+		// Try each candidate; the first that fetches AND parses wins. The winning path becomes the
+		// base for resolving index.toml and all mod files (PackFile.mapper -> PackwizPath.resolve).
+		var lastError: Exception? = null
+		val (packFileSource, pf) = packTomlCandidates.firstNotNullOfOrNull { candidate ->
+			try {
+				val src = HashFormat.SHA256.source(candidate.source(clientHolder))
+				val parsed = src.buffer().use { PackFile.mapper(candidate).decode<PackFile>(it.inputStream()) }
+				if (candidate !== opts.packFile) {
+					Log.info("pack.toml loaded from fallback mirror: $candidate")
+				}
+				src to parsed
+			} catch (e: Exception) {
+				lastError = e
+				Log.warn("Failed to load pack.toml from $candidate: ${e.message}")
+				null
+			}
+		} ?: ui.showErrorAndExit(
+			"Failed to download/parse pack.toml (tried ${packTomlCandidates.size} candidate(s))",
+			lastError ?: Exception("No pack.toml candidates")
+		)
 
 		if (ui.cancelButtonPressed) {
 			showCancellationDialog()

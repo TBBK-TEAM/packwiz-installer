@@ -40,7 +40,7 @@ dependencies {
 	implementation("com.squareup.okhttp3:okhttp:4.10.0")
 	implementation("cc.ekblad:4koma:1.1.0")
 
-	r8("com.android.tools:r8:3.3.28")
+	r8("com.android.tools:r8:8.5.35")
 }
 
 application {

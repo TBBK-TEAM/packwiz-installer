@@ -9,11 +9,11 @@ import link.infra.packwiz.installer.ui.cli.CLIHandler
 import link.infra.packwiz.installer.ui.gui.GUIHandler
 import link.infra.packwiz.installer.ui.wrap
 import link.infra.packwiz.installer.util.Log
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import okio.Path.Companion.toOkioPath
 import okio.Path.Companion.toPath
 import org.apache.commons.cli.DefaultParser
 import org.apache.commons.cli.HelpFormatter
+import org.apache.commons.cli.Option
 import org.apache.commons.cli.Options
 import org.apache.commons.cli.ParseException
 import java.awt.EventQueue
@@ -89,7 +89,7 @@ class Main(args: Array<String>) {
 		val packFile = when {
 			// HTTP(s) URLs
 			Regex("^https?://", RegexOption.IGNORE_CASE).containsMatchIn(packFileRaw) -> ui.wrap("Invalid HTTP/HTTPS URL for pack file: $packFileRaw") {
-				HttpUrlPath(packFileRaw.toHttpUrl().resolve(".")!!, packFileRaw.toHttpUrl().pathSegments.last())
+				HttpUrlPath.fromRaw(packFileRaw)
 			}
 			// File URIs (uses same logic as old packwiz-installer, for backwards compat)
 			Regex("^file:", RegexOption.IGNORE_CASE).containsMatchIn(packFileRaw) -> {
@@ -125,10 +125,11 @@ class Main(args: Array<String>) {
 		val pruneUserFolders = prune && cmd.hasOption("prune-user-folders")
 		val pruneAll = prune && cmd.hasOption("prune-all")
 		val fullSync = prune && cmd.hasOption("full-sync")
+		val mirrorUrls = cmd.getOptionValues("mirror")?.toList() ?: emptyList()
 
 		// Start update process!
 		try {
-			UpdateManager(UpdateManager.Options(packFile, manifestFile, packFolder, multimcFolder, side, timeout, prune, pruneMods, pruneUserFolders, pruneAll, fullSync), ui)
+			UpdateManager(UpdateManager.Options(packFile, manifestFile, packFolder, multimcFolder, side, timeout, prune, pruneMods, pruneUserFolders, pruneAll, fullSync, mirrorUrls), ui)
 		} catch (e: Exception) {
 			ui.showErrorAndExit("Update process failed", e)
 		}
@@ -152,6 +153,8 @@ class Main(args: Array<String>) {
 			options.addOption(null, "prune-all", false, "Sweep every folder of the pack with every file type, including folders it used to manage (implies --prune-mods, --prune-user-folders and --full-sync)")
 			options.addOption(null, "full-sync", false, "Also clean up folders the pack used to manage, and folders that are left empty (combine with --prune-mods or --prune-user-folders)")
 			options.addOption("V", "version", false, "Display the installer version")
+			options.addOption(Option.builder("m").longOpt("mirror").hasArg().argName("url")
+				.desc("Fallback pack.toml URL to try if the primary fails (repeatable)").build())
 		}
 
 		// TODO: link these somehow so they're only defined once?
