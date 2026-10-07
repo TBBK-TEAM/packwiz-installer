@@ -1,10 +1,10 @@
 plugins {
 	java
 	application
-	id("com.github.johnrengelman.shadow") version "7.1.2"
+	id("com.gradleup.shadow") version "8.3.3"
 	id("com.palantir.git-version") version "0.13.0"
 	id("com.github.breadmoirai.github-release") version "2.4.1"
-	kotlin("jvm") version "1.7.10"
+	kotlin("jvm") version "1.9.25"
 	id("com.github.jk1.dependency-license-report") version "2.0"
 	`maven-publish`
 }
