@@ -68,6 +68,8 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 		// Fallback pack.toml URLs (--mirror); tried in order if the primary pack.toml URL fails to
 		// fetch or parse. The first candidate that succeeds becomes the base for all relative paths.
 		val mirrorUrls: List<String> = emptyList(),
+		// Number of files downloaded at the same time (--download-threads)
+		val downloadThreads: Int = 4,
 	)
 
 	// TODO: make this return a value based on results?
@@ -388,7 +390,8 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 		}
 
 		// TODO: different thread pool type?
-		val threadPool = Executors.newFixedThreadPool(10)
+		val threadPool = Executors.newFixedThreadPool(opts.downloadThreads)
+		Log.info("Downloading files with ${opts.downloadThreads} concurrent threads")
 		val completionService: CompletionService<DownloadTask> = ExecutorCompletionService(threadPool)
 		tasks.forEach { t ->
 			completionService.submit {

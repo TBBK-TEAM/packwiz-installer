@@ -11,6 +11,9 @@ java -jar packwiz-installer.jar --side server --full-sync https://example.com/pa
 
 `--help` lists all options and `--version` prints the version of the installer.
 
+Files are downloaded concurrently; use `--download-threads <n>` to change how many files are
+downloaded at the same time (defaults to 4).
+
 Alternatively, [the bootstrapper](https://github.com/comp500/packwiz-installer-bootstrap/releases)
 can be used to keep the installer itself up to date:
 

@@ -118,6 +118,9 @@ class Main(args: Array<String>) {
 		val timeout = ui.wrap("Invalid timeout value") {
 			cmd.getOptionValue("timeout")?.toLong() ?: 10
 		}
+		val downloadThreads = ui.wrap("Invalid download-threads value") {
+			(cmd.getOptionValue("download-threads")?.toInt() ?: 4).coerceAtLeast(1)
+		}
 		// Files that the pack installed and later removed are deleted by default; files that the pack
 		// never installed (added by the player) are only deleted when that is explicitly requested
 		val prune = !cmd.hasOption("no-prune")
@@ -129,7 +132,7 @@ class Main(args: Array<String>) {
 
 		// Start update process!
 		try {
-			UpdateManager(UpdateManager.Options(packFile, manifestFile, packFolder, multimcFolder, side, timeout, prune, pruneMods, pruneUserFolders, pruneAll, fullSync, mirrorUrls), ui)
+			UpdateManager(UpdateManager.Options(packFile, manifestFile, packFolder, multimcFolder, side, timeout, prune, pruneMods, pruneUserFolders, pruneAll, fullSync, mirrorUrls, downloadThreads), ui)
 		} catch (e: Exception) {
 			ui.showErrorAndExit("Update process failed", e)
 		}
@@ -147,6 +150,7 @@ class Main(args: Array<String>) {
 			options.addOption(null, "multimc-folder", true, "The MultiMC pack folder (defaults to the parent of the pack directory)")
 			options.addOption(null, "meta-file", true, "JSON file to store pack metadata, relative to the pack folder (defaults to packwiz.json)")
 			options.addOption("t", "timeout", true, "Seconds to wait before automatically launching when asking about optional mods (defaults to 10)")
+			options.addOption(null, "download-threads", true, "Number of files to download at the same time (defaults to 4)")
 			options.addOption(null, "no-prune", false, "Keep files that are no longer part of the pack, instead of deleting them")
 			options.addOption(null, "prune-mods", false, "Also delete leftover files in the folders the pack installs mods into")
 			options.addOption(null, "prune-user-folders", false, "Also delete leftover files (configs, resource packs, ...) in the other folders the pack installs files into")
