@@ -2,6 +2,7 @@ package link.infra.packwiz.installer.target
 
 import link.infra.packwiz.installer.util.Log
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.Response
 import okio.FileSystem
 import java.net.SocketTimeoutException
@@ -13,6 +14,11 @@ class ClientHolder {
 
 	// TODO: a button to increase timeouts temporarily when retrying? manual retry button?
 	val okHttpClient by lazy { OkHttpClient.Builder()
+		// Force HTTP/1.1: HTTP/2 multiplexes all same-host requests onto ONE TCP connection, so
+		// parallel file downloads were all sharing a single connection's bandwidth (measured
+		// ~18 KB/s per connection, ~57 KB/s with 4 separate connections on this link).
+		// HTTP/1.1 gives each concurrent request its own connection.
+		.protocols(listOf(Protocol.HTTP_1_1))
 		// Retry requests according to retryTimes list
 		.addInterceptor {
 			val req = it.request()
